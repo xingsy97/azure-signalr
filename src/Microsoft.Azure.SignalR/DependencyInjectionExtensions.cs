@@ -62,10 +62,10 @@ namespace Microsoft.Extensions.DependencyInjection
                 .AddSingleton(typeof(IClientConnectionManager), typeof(ClientConnectionManager))
                 .AddSingleton(typeof(IServiceConnectionManager<>), typeof(ServiceConnectionManager<>))
                 .AddSingleton(typeof(IServiceEndpointProvider), typeof(ServiceEndpointProvider))
-                .AddSingleton(typeof(ServiceHubDispatcher<>))
+                .AddHostedService<ServiceConnectionManagerService>()
                 .AddSingleton(typeof(AzureSignalRMarkerService))
                 .AddSingleton<IClientConnectionFactory, ClientConnectionFactory>()
-                .AddSingleton<IHostedService, HeartBeat>()
+                .AddHostedService<HeartBeat>()
                 .AddSingleton<NegotiateHandler>();
             return builder;
         }

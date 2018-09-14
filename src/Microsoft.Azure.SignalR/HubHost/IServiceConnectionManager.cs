@@ -7,14 +7,19 @@ using Microsoft.Azure.SignalR.Protocol;
 
 namespace Microsoft.Azure.SignalR
 {
-    internal interface IServiceConnectionManager<THub> where THub : Hub
+    internal interface IServiceConnectionManager
     {
-        void AddServiceConnection(ServiceConnection serviceConnection);
-
         Task StartAsync();
 
         Task WriteAsync(ServiceMessage seviceMessage);
 
         Task WriteAsync(string partitionKey, ServiceMessage serviceMessage);
+
+        Task StopAsync();
+    }
+
+    internal interface IServiceConnectionManager<THub> : IServiceConnectionManager where THub : Hub
+    {
+        
     }
 }

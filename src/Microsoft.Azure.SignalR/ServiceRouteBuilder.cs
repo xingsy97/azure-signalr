@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.Azure.SignalR
 {
@@ -23,6 +24,7 @@ namespace Microsoft.Azure.SignalR
         private readonly IServiceProvider _serviceProvider;
         private readonly RouteBuilder _routes;
         private readonly NegotiateHandler _negotiateHandler;
+        private readonly ServiceConnectionManagerServiceOptions _options;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ServiceRouteBuilder"/> class.
@@ -31,8 +33,9 @@ namespace Microsoft.Azure.SignalR
         public ServiceRouteBuilder(RouteBuilder routes)
         {
             _routes = routes;
-            _serviceProvider = _routes.ServiceProvider;
+            _serviceProvider = routes.ServiceProvider;
             _negotiateHandler = _serviceProvider.GetRequiredService<NegotiateHandler>();
+            _options = _serviceProvider.GetRequiredService<IOptions<ServiceConnectionManagerServiceOptions>>().Value;
         }
 
         /// <summary>
@@ -48,7 +51,7 @@ namespace Microsoft.Azure.SignalR
         /// </summary>
         /// <typeparam name="THub">The <see cref="Hub"/> type to map requests to.</typeparam>
         /// <param name="path">The request path.</param>
-        public void MapHub<THub>(PathString path) where THub: Hub
+        public void MapHub<THub>(PathString path) where THub : Hub
         {
             // find auth attributes
             var authorizeAttributes = typeof(THub).GetCustomAttributes<AuthorizeAttribute>(inherit: true);
@@ -57,9 +60,10 @@ namespace Microsoft.Azure.SignalR
             {
                 authorizationData.Add(attribute);
             }
+
             _routes.MapRoute(path + Constants.Path.Negotiate, c => RedirectToService(c, typeof(THub).Name, authorizationData));
 
-            Start<THub>();
+            _options.Connections.Add(_serviceProvider.GetRequiredService<IServiceConnectionManager<THub>>());
         }
 
         private async Task RedirectToService(HttpContext context, string hubName, IList<IAuthorizeData> authorizationData)
@@ -84,16 +88,6 @@ namespace Microsoft.Azure.SignalR
             {
                 writer.Reset();
             }
-        }
-
-        private void Start<THub>() where THub : Hub
-        {
-            var app = new ConnectionBuilder(_serviceProvider)
-                .UseHub<THub>()
-                .Build();
-
-            var dispatcher = _serviceProvider.GetRequiredService<ServiceHubDispatcher<THub>>();
-            dispatcher.Start(app);
         }
     }
 }

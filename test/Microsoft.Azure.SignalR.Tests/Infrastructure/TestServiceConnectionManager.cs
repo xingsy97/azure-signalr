@@ -20,10 +20,8 @@ namespace Microsoft.Azure.SignalR.Tests
         {
         }
 
-        public async Task StartAsync()
-        {
-            await Task.CompletedTask;
-        }
+        public Task StartAsync() => Task.CompletedTask;
+        public Task StopAsync() => Task.CompletedTask;
 
         public Task WriteAsync(ServiceMessage serviceMessage)
         {

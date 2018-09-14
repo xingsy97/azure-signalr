@@ -96,7 +96,7 @@ namespace Microsoft.Azure.SignalR.Tests
         {
             var proxy = new ServiceConnectionProxy();
 
-            var serviceConnectionManager = new ServiceConnectionManager<TestHub>();
+            var serviceConnectionManager = new TestServiceConnectionManager<TestHub>();
             serviceConnectionManager.AddServiceConnection(proxy.ServiceConnection);
 
             var serviceLifetimeManager = new ServiceLifetimeManager<TestHub>(serviceConnectionManager,

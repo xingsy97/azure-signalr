@@ -7,6 +7,15 @@
   <Import Project="build\dependencies.props" />
   <Import Project="build\sources.props" />
 
+  <Import Project="Sdk.props" Sdk="Microsoft.DotNet.Arcade.Sdk" />
+
+  <PropertyGroup Condition="'$(CopyrightNetFoundation)' != ''">
+    <Copyright>$(CopyrightNetFoundation)</Copyright>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
   <PropertyGroup>
     <Product>Azure SignalR</Product>
     <Authors>Microsoft</Authors>

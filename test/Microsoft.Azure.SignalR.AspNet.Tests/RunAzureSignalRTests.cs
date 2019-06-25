@@ -441,7 +441,16 @@ namespace Microsoft.Azure.SignalR.AspNet.Tests
         [Fact]
         public async Task TestRunAzureSignalRWithDefaultRouterNegotiateWithFallback()
         {
-            using (StartVerifiableLog(out var loggerFactory, LogLevel.Debug))
+            using (StartVerifiableLog(out var loggerFactory, LogLevel.Warning, expectedErrors: e => true, logChecker: s =>
+            {
+                Assert.Equal(4, s.Count);
+                Assert.True(s.All(ss => ss.Write.EventId.Name == "EndpointOffline"));
+                Assert.Contains("Hub 'AzureSignalRTest' is now disconnected from '[tt3](Primary)http://localhost3'. Please check log for detailed info.", s.Select(ss => ss.Write.Message));
+                Assert.Contains("Hub 'AzureSignalRTest' is now disconnected from '[tt4](Secondary)http://localhost4'. Please check log for detailed info.", s.Select(ss => ss.Write.Message));
+                Assert.Contains("Hub 'chat' is now disconnected from '[tt3](Primary)http://localhost3'. Please check log for detailed info.", s.Select(ss => ss.Write.Message));
+                Assert.Contains("Hub 'chat' is now disconnected from '[tt4](Secondary)http://localhost4'. Please check log for detailed info.", s.Select(ss => ss.Write.Message));
+                return true;
+            }))
             {
                 // Prepare the configuration
                 var hubConfig = Utility.GetTestHubConfig(loggerFactory, "chat");
@@ -452,7 +461,7 @@ namespace Microsoft.Azure.SignalR.AspNet.Tests
 
                 var scf = new TestServiceConnectionFactory(endpoint =>
                 {
-                    if (endpoint.EndpointType == EndpointType.Primary)
+                    if (endpoint.Name != "es")
                     {
                         return new TestServiceConnection(ServiceConnectionStatus.Disconnected);
                     };
@@ -465,9 +474,9 @@ namespace Microsoft.Azure.SignalR.AspNet.Tests
                 {
                     options.Endpoints = new ServiceEndpoint[]
                     {
-                        new ServiceEndpoint(ConnectionString2, EndpointType.Secondary),
-                        new ServiceEndpoint(ConnectionString3),
-                        new ServiceEndpoint(ConnectionString4),
+                        new ServiceEndpoint(ConnectionString2, EndpointType.Secondary, "es"),
+                        new ServiceEndpoint(ConnectionString3, name: "tt3"),
+                        new ServiceEndpoint(ConnectionString4, name: "tt4", type: EndpointType.Secondary),
                     };
                 })))
                 {

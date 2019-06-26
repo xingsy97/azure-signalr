@@ -23,6 +23,7 @@ namespace Microsoft.Azure.SignalR.AspNet.Tests
         public TestServiceConnectionContainer(ServiceConnectionStatus status)
         {
             Status = status;
+            ConnectionStatusChanged?.Invoke(null);
         }
 
         public TestServiceConnectionContainer(string name, Action<(ServiceMessage, IServiceConnectionContainer)> validator)

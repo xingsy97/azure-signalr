@@ -42,9 +42,8 @@ namespace Microsoft.Azure.SignalR
         /// </summary>
         public EndpointMetrics EndpointMetrics { get; internal set; } = new EndpointMetrics();
 
-        internal ServiceEndpoint(string endpoint, AuthOptions authOptions, int port = 443)
+        public ServiceEndpoint(string endpoint, AuthOptions authOptions, int port = 443)
         {
-            // Endpoint = string.Format("https://{0}.service.signalr.net", resourceName);
             Endpoint = endpoint;
             AccessKey = new AadAccessKey(authOptions);
 

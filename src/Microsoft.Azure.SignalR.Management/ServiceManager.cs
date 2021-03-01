@@ -37,18 +37,15 @@ namespace Microsoft.Azure.SignalR.Management
 
         public async Task<IServiceHubContext> CreateHubContextAsync(string hubName, ILoggerFactory loggerFactory = null, CancellationToken cancellationToken = default)
         {
-            var servicesPerHub = new ServiceCollection().Add(_services).AddSingleton(_services).AddHub(hubName, _transportType);
+            var services = new ServiceCollection().Add(_services);
+            var hubContextBuilder = new ServiceHubContextBuilder(services);
             if (loggerFactory != null)
             {
-                servicesPerHub.AddSingleton(loggerFactory);
+                hubContextBuilder.WithLoggerFactory(loggerFactory);
             }
-            var serviceProviderForHub = servicesPerHub.BuildServiceProvider();
-            var connectionContainer = serviceProviderForHub.GetService<IServiceConnectionContainer>();
-            if (connectionContainer != null)
-            {
-                await connectionContainer.ConnectionInitializedTask.OrTimeout(cancellationToken);
-            }
-            return serviceProviderForHub.GetRequiredService<ServiceHubContextImpl>();
+
+            var hubContext = await hubContextBuilder.CreateAsync(hubName, cancellationToken);
+            return hubContext;
         }
 
         public void Dispose()

@@ -3,11 +3,11 @@
 
   <Import Project="..\Directory.Build.props" />
 
-  <PropertyGroup>
+    <PropertyGroup>
     <NuGetPackagesDir Condition=" '$(NuGetPackagesDir)' == '' ">$(UserProfile)\.nuget\packages</NuGetPackagesDir>
-    <MicroBuildPropsAndTargetsPath>$(NuGetPackagesDir)\microbuild.core\$(MicroBuildCorePackageVersion)\build\</MicroBuildPropsAndTargetsPath>    
+    <MicroBuildPropsAndTargetsPath>$(NuGetPackagesDir)\microbuild.core\$(MicroBuildCorePackageVersion)\build\</MicroBuildPropsAndTargetsPath>
   </PropertyGroup>
-  
+
   <Import Project="$(MicroBuildPropsAndTargetsPath)MicroBuild.Core.props" />
 
   <!-- This will be overridden if we're building with MicroBuild. -->
@@ -16,7 +16,7 @@
   </Target>
 
   <Target Name="SignPackages" DependsOnTargets="_GetSignPackages;SignFiles" />
-  
+
   <Target Name="_GetSignPackages">
     <PropertyGroup>
       <!-- The OutDir and IntermediateOutputPath properties are required by MicroBuild. MicroBuild only
@@ -24,7 +24,7 @@
       <OutDir>$(RepositoryRoot)\</OutDir>
       <IntermediateOutputPath>$(RepositoryRoot)\artifacts\build</IntermediateOutputPath>
     </PropertyGroup>
-    
+
     <ItemGroup>
       <!-- Adding the assemblies to sign -->
       <FilesToSign Include="$(OutDir)artifacts\build\*.nupkg">
@@ -33,5 +33,5 @@
     </ItemGroup>
   </Target>
 
-  <Import Project="$(MicroBuildPropsAndTargetsPath)MicroBuild.Core.targets" />
+    <Import Project="$(MicroBuildPropsAndTargetsPath)MicroBuild.Core.targets" />
 </Project>

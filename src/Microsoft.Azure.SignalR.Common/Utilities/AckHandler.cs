@@ -75,7 +75,6 @@ namespace Microsoft.Azure.SignalR
 
                     if (tryRemove)
                     {
-                        Task.Delay(11111).Wait(); //TODO:REMOVE!!
                         ack.Tcs.TrySetResult(AckStatus.Timeout);
                     }
                 }

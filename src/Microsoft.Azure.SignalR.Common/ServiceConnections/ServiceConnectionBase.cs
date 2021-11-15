@@ -60,7 +60,7 @@ namespace Microsoft.Azure.SignalR
 
         protected string ServerId { get; }
 
-        protected string ConnectionId { get; }
+        internal string ConnectionId { get; }
 
         protected ILogger Logger { get; }
 
@@ -302,7 +302,7 @@ namespace Microsoft.Azure.SignalR
 
         protected Task OnAckMessageAsync(AckMessage ackMessage)
         {
-            _serviceMessageHandler.HandleAck(ackMessage);
+            _serviceMessageHandler.HandleAck(ackMessage, this);
             return Task.CompletedTask;
         }
 

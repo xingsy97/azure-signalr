@@ -1,12 +1,16 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.SignalR.Common.Utilities;
 
 namespace Microsoft.Azure.SignalR
 {
     internal sealed class AckHandler : IDisposable
     {
+        public static AckTrace AckTrace = new AckTrace();
+
         private readonly ConcurrentDictionary<int, AckInfo> _acks = new ConcurrentDictionary<int, AckInfo>();
         private readonly Timer _timer;
         private readonly TimeSpan _ackInterval;
@@ -47,12 +51,15 @@ namespace Microsoft.Azure.SignalR
             return tcs.Task;
         }
 
-        public void TriggerAck(int id, AckStatus ackStatus)
+        public void TriggerAck(int id, AckStatus ackStatus, string connId, int containerHash)
         {
-            if (_acks.TryRemove(id, out var ack))
+            bool removed = _acks.TryRemove(id, out var ack);
+            bool setResult = false;
+            if (removed)
             {
-                ack.Tcs.TrySetResult(ackStatus);
+                setResult = ack.Tcs.TrySetResult(ackStatus);
             }
+            AckTrace.AddTrace(id, CallScopeId.Current, ClientConnectionScope.ScopeId, $"TriggerAck! Removed: {removed}, SetResult: {setResult}, ackStatus: {ackStatus}, SrvConnId: {connId}, svcContainer# {containerHash}");
         }
 
         private void CheckAcks()
@@ -63,8 +70,12 @@ namespace Microsoft.Azure.SignalR
             {
                 if (utcNow > pair.Value.Expired)
                 {
-                    if (_acks.TryRemove(pair.Key, out var ack))
+                    var tryRemove = _acks.TryRemove(pair.Key, out var ack);
+                    AckTrace.AddTrace(pair.Key, CallScopeId.Current, ClientConnectionScope.ScopeId, $"CheckAcks! TryRemove ack with tcs, result: {tryRemove}, tcs.Task status: {ack?.Tcs?.Task?.Status}");
+
+                    if (tryRemove)
                     {
+                        Task.Delay(11111).Wait(); //TODO:REMOVE!!
                         ack.Tcs.TrySetResult(AckStatus.Timeout);
                     }
                 }

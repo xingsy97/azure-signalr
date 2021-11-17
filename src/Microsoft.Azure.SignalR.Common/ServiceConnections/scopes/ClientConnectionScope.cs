@@ -83,12 +83,15 @@ namespace Microsoft.Azure.SignalR
         internal static string GetConnectionId(long endpointId)
         {
             var containers = ClientConnectionScope.OutboundServiceConnections;
-            containers.TryGetValue(endpointId, out var connectionWeakReference);
-            IServiceConnection connection = null;
-            connectionWeakReference?.TryGetTarget(out connection);
-            if (connection != null)
+            if (containers != null)
             {
-                return (connection as ServiceConnectionBase)?.ConnectionId;
+                containers.TryGetValue(endpointId, out var connectionWeakReference);
+                IServiceConnection connection = null;
+                connectionWeakReference?.TryGetTarget(out connection);
+                if (connection != null)
+                {
+                    return (connection as ServiceConnectionBase)?.ConnectionId;
+                }
             }
             return "not_found";
         }

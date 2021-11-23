@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Protocol;
+using Microsoft.Azure.SignalR.Common.Utilities;
 using Microsoft.Azure.SignalR.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -229,7 +230,12 @@ namespace Microsoft.Azure.SignalR
             {
                 MessageLog.StartToAddConnectionToGroup(Logger, message);
             }
-            return WriteAckableMessageAsync(message);
+            using (new CallScopeId())
+            {
+                AckHandler.AckTrace.AddTrace(0, CallScopeId.Current, ClientConnectionScope.ScopeId, $"AddToGroupAsync! ConnectionId: {message.ConnectionId} groupName: {message.GroupName}");
+                return WriteAckableMessageAsync(message);
+            }
+
         }
 
         public override Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
@@ -310,6 +316,12 @@ namespace Microsoft.Azure.SignalR
             try
             {
                 var result = await task(message);
+
+                if (message is JoinGroupWithAckMessage joinGroupMsg)
+                {
+                    AckHandler.AckTrace.AddTrace(joinGroupMsg?.AckId, CallScopeId.Current, ClientConnectionScope.ScopeId, $"WriteAckableCoreAsync done! ConnectionId: {joinGroupMsg?.ConnectionId} groupName: {joinGroupMsg.GroupName}");
+                }
+
                 if (message.TracingId != null)
                 {
                     MessageLog.SucceededToSendMessage(Logger, message);
@@ -318,6 +330,11 @@ namespace Microsoft.Azure.SignalR
             }
             catch (Exception ex)
             {
+                if (message is JoinGroupWithAckMessage joinGroupMsg)
+                {
+                    AckHandler.AckTrace.AddTrace(joinGroupMsg?.AckId, CallScopeId.Current, ClientConnectionScope.ScopeId, $"WriteAckableCoreAsync exception! {ex} ConnectionId: {joinGroupMsg?.ConnectionId} groupName: {joinGroupMsg.GroupName}");
+                }
+
                 MessageLog.FailedToSendMessage(Logger, message, ex);
                 throw;
             }

@@ -15,7 +15,7 @@ namespace Microsoft.Azure.SignalR.Tests.Common
 
         public Task HandlePingAsync(PingMessage pingMessage) => Task.CompletedTask;
 
-        public void HandleAck(AckMessage serviceMessage)
+        public void HandleAck(AckMessage serviceMessage, IServiceConnection svcConn = null)
         {
             throw new NotImplementedException();
         }

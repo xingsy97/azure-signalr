@@ -10,6 +10,7 @@ namespace Microsoft.Azure.SignalR
     {
         Task HandlePingAsync(PingMessage pingMessage);
 
-        void HandleAck(AckMessage ackMessage);
+        void HandleAck(AckMessage ackMessage, IServiceConnection svcConn = null);
+
     }
 }

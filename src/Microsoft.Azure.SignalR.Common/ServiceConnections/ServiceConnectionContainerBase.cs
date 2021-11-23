@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.SignalR.Common;
+using Microsoft.Azure.SignalR.Common.Utilities;
 using Microsoft.Azure.SignalR.Protocol;
 using Microsoft.Extensions.Logging;
 
@@ -214,9 +215,9 @@ namespace Microsoft.Azure.SignalR
             return Task.CompletedTask;
         }
 
-        public void HandleAck(AckMessage ackMessage)
+        public void HandleAck(AckMessage ackMessage, IServiceConnection svcConn = null)
         {
-            _ackHandler.TriggerAck(ackMessage.AckId, (AckStatus)ackMessage.Status);
+            _ackHandler.TriggerAck(ackMessage.AckId, (AckStatus)ackMessage.Status, (svcConn as ServiceConnectionBase)?.ConnectionId, GetHashCode());
         }
 
         public Task ConnectionInitializedTask => Task.WhenAny(from connection in ServiceConnections
@@ -238,9 +239,28 @@ namespace Microsoft.Azure.SignalR
             ackableMessage.AckId = id;
 
             // There is no need to write ackable message to sticky connections
-            await WriteWithRetry(serviceMessage, null, ServiceConnections);
+            // return the original behavior back to be able to catch the culprit 
+            //await WriteWithRetry(serviceMessage, null, ServiceConnections);
+            if (serviceMessage is JoinGroupWithAckMessage joinGroupMessage)
+            {
+                AckHandler.AckTrace.AddTrace(id, CallScopeId.Current, ClientConnectionScope.ScopeId, $"WriteAckableMessageAsync! Created ack for JoinGroupMessage. SvcConnectionId before send: {ClientConnectionScope.GetConnectionId(Endpoint.UniqueIndex)}. msg ConnectionId {joinGroupMessage.ConnectionId} msg GroupName {joinGroupMessage.GroupName}, AL.count: {ClientConnectionScope.OutboundServiceConnections?.Count}");
+            }
+
+            await WriteToScopedOrRandomAvailableConnection(serviceMessage);
+
+            if (serviceMessage is JoinGroupWithAckMessage joinGroupMessage2)
+            {
+                AckHandler.AckTrace.AddTrace(id, CallScopeId.Current, ClientConnectionScope.ScopeId, $"WriteAckableMessageAsync! Finished awaiting WriteToScopedOrRandomAvailableConnection. SvcConnectionId after send: {ClientConnectionScope.GetConnectionId(Endpoint.UniqueIndex)}, AL.count: {ClientConnectionScope.OutboundServiceConnections?.Count}");
+            }
 
             var status = await task;
+
+            if (serviceMessage is JoinGroupWithAckMessage joinGroupMessage3)
+            {
+                AckHandler.AckTrace.AddTrace(id, CallScopeId.Current, ClientConnectionScope.ScopeId, $"WriteAckableMessageAsync! Finished awaiting ack status: {status}. SvcConnectionId after ack: {ClientConnectionScope.GetConnectionId(Endpoint.UniqueIndex)}, AL.count: {ClientConnectionScope.OutboundServiceConnections?.Count}");
+            }
+
+
             switch (status)
             {
                 case AckStatus.Ok:
@@ -248,7 +268,7 @@ namespace Microsoft.Azure.SignalR
                 case AckStatus.NotFound:
                     return false;
                 case AckStatus.Timeout:
-                    throw new TimeoutException($"Ack-able message {serviceMessage.GetType()} waiting for ack timed out.");
+                    throw new TimeoutException($"Ack-able message {serviceMessage.GetType()} waiting for ack timed out. \r\n Traces: \r\n {AckHandler.AckTrace.FindTraces(id)}");
                 default:
                     throw new InvalidDataException($"Unexpected ack status is returned from ack-able message with ackid {ackableMessage.AckId}");
             }
@@ -487,6 +507,24 @@ namespace Microsoft.Azure.SignalR
                 IServiceConnection connection = null;
                 connectionWeakReference?.TryGetTarget(out connection);
 
+                if (serviceMessage is JoinGroupWithAckMessage joinGroupMessage)
+                {
+                    // extra check if this connection belongs to the container we're in
+                    bool found = false;
+                    foreach (var c in _serviceConnections)
+                    {
+                        if (c == connection)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    AckHandler.AckTrace.AddTrace(joinGroupMessage.AckId, CallScopeId.Current, ClientConnectionScope.ScopeId,
+                        $"WriteToScopedOrRandomAvailableConnection! Found SvcConnection in container: {found}, svc conn  {(connection as ServiceConnectionBase)?.ConnectionId}, conn status: {connection?.Status}, svc container # {GetHashCode()}, AL.Count {containers?.Count} ");
+                }
+
+
                 var connectionUsed = await WriteWithRetry(serviceMessage, connection, currentConnections);
 
                 // Todo:
@@ -500,6 +538,11 @@ namespace Microsoft.Azure.SignalR
                 if (connectionUsed != connection)
                 {
                     ClientConnectionScope.OutboundServiceConnections[Endpoint.UniqueIndex] = new WeakReference<IServiceConnection>(connectionUsed);
+                    if (serviceMessage is JoinGroupWithAckMessage joinGroupMessage2)
+                    {
+                        AckHandler.AckTrace.AddTrace(joinGroupMessage2.AckId, CallScopeId.Current, ClientConnectionScope.ScopeId,
+                            $"WriteToScopedOrRandomAvailableConnection! Switched connection to svc conn: {(connectionUsed as ServiceConnectionBase)?.ConnectionId} status: {connectionUsed?.Status}, svc container # {GetHashCode()} , AL.CC {ClientConnectionScope.OutboundServiceConnections?.Count}");
+                    }
                 }
             }
             else

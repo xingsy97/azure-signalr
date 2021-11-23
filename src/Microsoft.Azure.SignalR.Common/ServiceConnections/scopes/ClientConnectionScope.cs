@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Threading;
 using Microsoft.Azure.SignalR.Common.Utilities;
 
 namespace Microsoft.Azure.SignalR
@@ -14,6 +15,8 @@ namespace Microsoft.Azure.SignalR
     internal class ClientConnectionScope : IDisposable
     {
         private readonly bool _needCleanup;
+        private static long s_scopeID = 0;
+
 
         internal ClientConnectionScope() : this(default, default, default)
         {
@@ -41,7 +44,8 @@ namespace Microsoft.Azure.SignalR
                         Properties = new ClientConnectionScopeProperties()
                         {
                             OutboundServiceConnections = dict,
-                            IsDiagnosticClient = isDiagnosticClient
+                            IsDiagnosticClient = isDiagnosticClient,
+                            ScopeId = Interlocked.Increment(ref s_scopeID)
                         }
                     };
             }
@@ -77,6 +81,24 @@ namespace Microsoft.Azure.SignalR
             }
         }
 
+        internal static string GetConnectionId(long endpointId)
+        {
+            var containers = ClientConnectionScope.OutboundServiceConnections;
+            if (containers != null)
+            {
+                containers.TryGetValue(endpointId, out var connectionWeakReference);
+                IServiceConnection connection = null;
+                connectionWeakReference?.TryGetTarget(out connection);
+                if (connection != null)
+                {
+                    return (connection as ServiceConnectionBase)?.ConnectionId;
+                }
+            }
+            return "not_found";
+        }
+
+
+
         internal static bool IsDiagnosticClient
         {
             get => ScopePropertiesAccessor<ClientConnectionScopeProperties>.Current?.Properties?.IsDiagnosticClient ?? false;
@@ -90,11 +112,24 @@ namespace Microsoft.Azure.SignalR
             }
         }
 
+        internal static long ScopeId => ScopePropertiesAccessor<ClientConnectionScopeProperties>.Current?.Properties?.ScopeId ?? 0;
+
+
+
         private class ClientConnectionScopeProperties
         {
             public ConcurrentDictionary<long, WeakReference<IServiceConnection>> OutboundServiceConnections { get; set; }
 
             public bool IsDiagnosticClient { get; set; }
+
+            public long ScopeId { get; set; }
         }
+
+        private class AddGroupCallScopeProps
+        {
+            public string GroupName { get; set; }
+            public long CallId { get; set; }
+        }
+
     }
 }

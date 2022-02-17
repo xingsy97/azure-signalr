@@ -18,7 +18,7 @@
 
   <ItemGroup>
       <!-- Adding the assemblies to sign -->
-      <FilesToSign Include="$(OutDir)\$(RootNamespace)*.nupkg">
+      <FilesToSign Include="$(OutDir)\$(RootNamespace)*nupkg">
         <Authenticode>NuGet</Authenticode>
       </FilesToSign>
   </ItemGroup>

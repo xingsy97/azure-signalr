@@ -511,7 +511,7 @@ namespace Microsoft.Azure.SignalR
 
                             while (ServiceProtocol.TryParseMessage(ref buffer, out var message))
                             {
-                                _ = DispatchMessageAsync(message);
+                                _ = TryDispatchMessageAsync(message);
                             }
                         }
 
@@ -526,7 +526,7 @@ namespace Microsoft.Azure.SignalR
                     {
                         // Error occurs in handling the message, but the connection between SDK and service still works.
                         // So, just log error instead of breaking the connection
-                        Log.ErrorProcessingMessages(Logger, ConnectionId, ex);
+                        Log.ErrorProcessingMessages(Logger, ConnectionId, ex.Message, ex);
                     }
                     finally
                     {
@@ -538,6 +538,18 @@ namespace Microsoft.Azure.SignalR
             {
                 keepAliveTimer.Stop();
                 _serviceConnectionOfflineTcs.TrySetResult(true);
+            }
+        }
+
+        private async Task TryDispatchMessageAsync(ServiceMessage message)
+        {
+            try
+            {
+                await DispatchMessageAsync(message);
+            }
+            catch (Exception ex)
+            {
+                Log.ErrorProcessingMessages(Logger, ConnectionId, message.GetType().Name, ex);
             }
         }
 
@@ -632,8 +644,8 @@ namespace Microsoft.Azure.SignalR
             private static readonly Action<ILogger, string, string, string, Exception> _failedToConnect =
                 LoggerMessage.Define<string, string, string>(LogLevel.Error, new EventId(2, "FailedToConnect"), "Failed to connect to '{endpoint}', will retry after the back off period. Error detail: {message}. Id: {ServiceConnectionId}");
 
-            private static readonly Action<ILogger, string, Exception> _errorProcessingMessages =
-                LoggerMessage.Define<string>(LogLevel.Error, new EventId(3, "ErrorProcessingMessages"), "Error when processing messages. Id: {ServiceConnectionId}");
+            private static readonly Action<ILogger, string, string, Exception> _errorProcessingMessages =
+                LoggerMessage.Define<string, string>(LogLevel.Error, new EventId(3, "ErrorProcessingMessages"), "Error when processing messages {detail}. Id: {ServiceConnectionId}");
 
             private static readonly Action<ILogger, string, string, string, Exception> _connectionDropped =
                 LoggerMessage.Define<string, string, string>(LogLevel.Information, new EventId(4, "ConnectionDropped"), "Connection to '{endpoint}' was dropped, probably caused by network instability or service restart. Will try to reconnect after the back off period. Error detail: {message}. Id: {ServiceConnectionId}.");
@@ -714,9 +726,9 @@ namespace Microsoft.Azure.SignalR
                 _failedToConnect(logger, endpoint, message, serviceConnectionId, null);
             }
 
-            public static void ErrorProcessingMessages(ILogger logger, string serviceConnectionId, Exception exception)
+            public static void ErrorProcessingMessages(ILogger logger, string serviceConnectionId, string detail, Exception exception)
             {
-                _errorProcessingMessages(logger, serviceConnectionId, exception);
+                _errorProcessingMessages(logger, detail, serviceConnectionId, exception);
             }
 
             public static void ConnectionDropped(ILogger logger, string endpoint, string serviceConnectionId, Exception exception)

@@ -198,4 +198,18 @@ namespace Microsoft.Azure.SignalR.Protocol
             GroupList = groupList;
         }
     }
+
+    public class ClientInvocationMessage : MulticastDataMessage
+    {
+        public ClientInvocationMessage(string connectionId, string invocationId, string callerId, IDictionary<string, ReadOnlyMemory<byte>> payloads, ulong? tracingId = null)
+            : base(payloads, tracingId)
+        {
+            ConnectionId = connectionId;
+            InvocationId = invocationId;
+            CallerId = callerId;
+        }
+        public string ConnectionId { get; set; }
+        public string InvocationId { get; set; }
+        public string CallerId { get; set; }
+    }
 }

@@ -23,21 +23,21 @@ namespace Microsoft.Azure.SignalR
         protected ILogger Logger { get; set; }
 
         private readonly DefaultHubMessageSerializer _messageSerializer;
-        //private readonly IServerNameProvider _nameProvider;
-        //private ulong _lastInvocationId;
+        private readonly IServerNameProvider _nameProvider;
+        private ulong _lastInvocationId;
 
         public ServiceLifetimeManagerBase(
             IServiceConnectionManager<THub> serviceConnectionManager, 
             IHubProtocolResolver protocolResolver, 
             IOptions<HubOptions> globalHubOptions, 
             IOptions<HubOptions<THub>> hubOptions,
-            //IServerNameProvider nameProvider,
+            IServerNameProvider nameProvider,
             ILogger logger)
         {
             Logger = logger ?? throw new ArgumentNullException(nameof(logger));
             ServiceConnectionContainer = serviceConnectionManager;
             _messageSerializer = new DefaultHubMessageSerializer(protocolResolver, globalHubOptions.Value.SupportedProtocols, hubOptions.Value.SupportedProtocols);
-            //_nameProvider = nameProvider ?? throw new ArgumentNullException(nameof(nameProvider));
+            _nameProvider = nameProvider ?? throw new ArgumentNullException(nameof(nameProvider));
         }
 
         public override Task OnConnectedAsync(HubConnectionContext connection)
@@ -278,50 +278,53 @@ namespace Microsoft.Azure.SignalR
             return WriteAckableMessageAsync(message, cancellationToken);
         }
 
-//#if NET7_0_OR_GREATER
-//        public override async Task<T> InvokeConnectionAsync<T>(string connectionId, string methodName, object[] args, CancellationToken cancellationToken = default)
-//        {
-//            if (IsInvalidArgument(connectionId))
-//            {
-//                throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(connectionId));
-//            }
-//
-//            if (IsInvalidArgument(methodName))
-//            {
-//                throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(methodName));
-//            }
-//            var invocationId = Interlocked.Increment(ref _lastInvocationId).ToString(NumberFormatInfo.InvariantInfo);
-//            var serverId = _nameProvider.GetName();
-//            var message = AppendMessageTracingId(new ClientInvocationMessage(connectionId, invocationId, serverId, SerializeAllProtocols(methodName, args)));
-//            try
-//            {
-//                await WriteAsync(message);
-//            }
-//            catch (Exception)
-//            {
-//
-//            }
-//            //return base.InvokeConnectionAsync<T>(connectionId, methodName, args, cancellationToken);
-//        }
-//
-//        public override Task SetConnectionResultAsync(string connectionId, CompletionMessage result)
-//        {
-//            if (IsInvalidArgument(connectionId))
-//            {
-//                throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(connectionId));
-//            }
-//            var serverId = _nameProvider.GetName();
-//            var 
-//            var message = AppendMessageTracingId(new ServiceCompletionMessage(connectionId, result.InvocationId, serverId, CompletionMessage.Result.);
-//            //base.SetConnectionResultAsync(connectionId, result);
-//            return Task.CompletedTask;
-//        }
-//
-//        public override bool TryGetReturnType(string invocationId, [NotNullWhen(true)] out Type type)
-//        {
-//            return base.TryGetReturnType(invocationId, out type);
-//        }
-//#endif
+#if NET7_0_OR_GREATER
+        public override async Task<T> InvokeConnectionAsync<T>(string connectionId, string methodName, object[] args, CancellationToken cancellationToken = default)
+        {
+            if (IsInvalidArgument(connectionId))
+            {
+                throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(connectionId));
+            }
+
+            if (IsInvalidArgument(methodName))
+            {
+                throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(methodName));
+            }
+            var invocationId = Interlocked.Increment(ref _lastInvocationId).ToString(NumberFormatInfo.InvariantInfo);
+            var serverId = _nameProvider.GetName();
+            var message = AppendMessageTracingId(new ClientInvocationMessage(connectionId, invocationId, serverId, SerializeAllProtocols(methodName, args)));
+            try
+            {
+                await WriteAsync(message);
+            }
+            catch (Exception)
+            {
+
+            }
+            //return base.InvokeConnectionAsync<T>(connectionId, methodName, args, cancellationToken);
+        }
+
+        public override Task SetConnectionResultAsync(string connectionId, CompletionMessage result)
+        {
+            if (IsInvalidArgument(connectionId))
+            {
+                throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(connectionId));
+            }
+            var serverId = _nameProvider.GetName();
+            if (result.HasResult)
+            {
+                var payload = new ReadOnlyMemory<byte>(result.Result);
+                var message = AppendMessageTracingId(new ServiceCompletionMessage(connectionId, result.InvocationId, serverId, payload));
+            }    
+            //base.SetConnectionResultAsync(connectionId, result);
+            return Task.CompletedTask;
+        }
+
+        public override bool TryGetReturnType(string invocationId, [NotNullWhen(true)] out Type type)
+        {
+            return base.TryGetReturnType(invocationId, out type);
+        }
+#endif
 
         protected Task WriteAsync<T>(T message) where T : ServiceMessage, IMessageWithTracingId =>
             WriteCoreAsync(message, m => ServiceConnectionContainer.WriteAsync(message));

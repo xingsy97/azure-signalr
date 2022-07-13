@@ -24,12 +24,15 @@ namespace Microsoft.Azure.SignalR
 
         private readonly DefaultHubMessageSerializer _messageSerializer;
         private readonly IServerNameProvider _nameProvider;
-        private ulong _lastInvocationId;
+        private readonly string _callerId;
+#if NET7_0_OR_GREATER
+        private readonly ClientResultsManager _clientResults = new();
+#endif
 
         public ServiceLifetimeManagerBase(
-            IServiceConnectionManager<THub> serviceConnectionManager, 
-            IHubProtocolResolver protocolResolver, 
-            IOptions<HubOptions> globalHubOptions, 
+            IServiceConnectionManager<THub> serviceConnectionManager,
+            IHubProtocolResolver protocolResolver,
+            IOptions<HubOptions> globalHubOptions,
             IOptions<HubOptions<THub>> hubOptions,
             IServerNameProvider nameProvider,
             ILogger logger)
@@ -38,6 +41,7 @@ namespace Microsoft.Azure.SignalR
             ServiceConnectionContainer = serviceConnectionManager;
             _messageSerializer = new DefaultHubMessageSerializer(protocolResolver, globalHubOptions.Value.SupportedProtocols, hubOptions.Value.SupportedProtocols);
             _nameProvider = nameProvider ?? throw new ArgumentNullException(nameof(nameProvider));
+            _callerId = _nameProvider.GetName().GetHashCode().ToString(NumberFormatInfo.InvariantInfo);
         }
 
         public override Task OnConnectedAsync(HubConnectionContext connection)
@@ -290,39 +294,49 @@ namespace Microsoft.Azure.SignalR
             {
                 throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(methodName));
             }
-            var invocationId = Interlocked.Increment(ref _lastInvocationId).ToString(NumberFormatInfo.InvariantInfo);
-            var serverId = _nameProvider.GetName();
-            var message = AppendMessageTracingId(new ClientInvocationMessage(connectionId, invocationId, serverId, SerializeAllProtocols(methodName, args)));
+            // globally distinct invocationId
+            // $"{connectionId}{_callerId}{_clientResults.GetNewInvocation()}";
+            // _clientResults.GetNewInvocation().ToString(NumberFormatInfo.InvariantInfo);
+            var invocationId = $"{connectionId}-{_callerId}-{_clientResults.GetNewInvocation()}";
+            var task = _clientResults.AddInvocation<T>(connectionId, invocationId, cancellationToken);
             try
             {
+                var message = AppendMessageTracingId(new ClientInvocationMessage(invocationId, connectionId, _callerId, SerializeAllProtocols(methodName, args, invocationId)));
                 await WriteAsync(message);
             }
             catch (Exception)
             {
-
+                _clientResults.RemoveInvocation(invocationId);
+                throw;
             }
-            //return base.InvokeConnectionAsync<T>(connectionId, methodName, args, cancellationToken);
+
+            try
+            {
+                return await task;
+            }
+            catch
+            {
+                throw;
+            }
         }
 
-        public override Task SetConnectionResultAsync(string connectionId, CompletionMessage result)
+        public override async Task SetConnectionResultAsync(string connectionId, CompletionMessage result)
         {
             if (IsInvalidArgument(connectionId))
             {
                 throw new ArgumentException(NullOrEmptyStringErrorMessage, nameof(connectionId));
             }
+            // complete local
+            _clientResults.TryCompleteResult(connectionId, result);
+            // complete service
             var serverId = _nameProvider.GetName();
-            if (result.HasResult)
-            {
-                var payload = new ReadOnlyMemory<byte>(result.Result);
-                var message = AppendMessageTracingId(new ServiceCompletionMessage(connectionId, result.InvocationId, serverId, payload));
-            }    
-            //base.SetConnectionResultAsync(connectionId, result);
-            return Task.CompletedTask;
+            var message = AppendMessageTracingId(new ServiceCompletionMessage(connectionId, result.InvocationId, serverId, SerializeCompletionMessage(result)));
+            await WriteAsync(message);
         }
 
         public override bool TryGetReturnType(string invocationId, [NotNullWhen(true)] out Type type)
         {
-            return base.TryGetReturnType(invocationId, out type);
+            return _clientResults.TryGetType(invocationId, out type);
         }
 #endif
 
@@ -342,10 +356,18 @@ namespace Microsoft.Azure.SignalR
             return list == null;
         }
 
-        protected IDictionary<string, ReadOnlyMemory<byte>> SerializeAllProtocols(string method, object[] args)
+        protected IDictionary<string, ReadOnlyMemory<byte>> SerializeAllProtocols(string method, object[] args, string invocationId = null)
         {
             var payloads = new Dictionary<string, ReadOnlyMemory<byte>>();
-            var message = new InvocationMessage(method, args);
+            InvocationMessage message;
+            if (invocationId == null)
+            {
+                message = new InvocationMessage(method, args);
+            }
+            else
+            {
+                message = new InvocationMessage(invocationId, method, args);
+            }
             var serializedHubMessages = _messageSerializer.SerializeMessage(message);
             foreach (var serializedMessage in serializedHubMessages)
             {
@@ -356,6 +378,17 @@ namespace Microsoft.Azure.SignalR
 
         protected ReadOnlyMemory<byte> SerializeProtocol(string protocol, string method, object[] args) =>
             _messageSerializer.SerializeMessage(protocol, new InvocationMessage(method, args));
+
+        protected IDictionary<string, ReadOnlyMemory<byte>> SerializeCompletionMessage(CompletionMessage message)
+        {
+            var payloads = new Dictionary<string, ReadOnlyMemory<byte>>();
+            var serializedHubMessages = _messageSerializer.SerializeMessage(message);
+            foreach (var serializedMessage in serializedHubMessages)
+            {
+                payloads.Add(serializedMessage.ProtocolName, serializedMessage.Serialized);
+            }
+            return payloads;
+        }
 
         protected virtual T AppendMessageTracingId<T>(T message) where T : ServiceMessage, IMessageWithTracingId
         {

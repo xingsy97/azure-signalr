@@ -92,6 +92,10 @@ namespace Microsoft.Azure.SignalR.Protocol.Tests
                     return AckMessageEqual(ackMessage, (AckMessage)y);
                 case ServiceEventMessage serviceWarningMessage:
                     return ServiceWarningMessageEqual(serviceWarningMessage, (ServiceEventMessage)y);
+                case ClientInvocationMessage clientInvocationMessage:
+                    return ClientInvocationMessageEuqal(clientInvocationMessage, (ClientInvocationMessage)y);
+                case ServiceCompletionMessage serviceCompletionMessage:
+                    return ServiceCompletionMessageEqual(serviceCompletionMessage, (ServiceCompletionMessage)y);
                 default:
                     throw new InvalidOperationException($"Unknown message type: {x.GetType().FullName}");
             }
@@ -330,6 +334,23 @@ namespace Microsoft.Azure.SignalR.Protocol.Tests
                 StringEqual(x.Id, y.Id) &&
                 x.Kind == y.Kind &&
                 StringEqual(x.Message, y.Message);
+        }
+
+        private bool ClientInvocationMessageEuqal(ClientInvocationMessage x, ClientInvocationMessage y)
+        {
+            return StringEqual(x.InvocationId, y.InvocationId) &&
+                StringEqual(x.ConnectionId, y.ConnectionId) &&
+                StringEqual(x.CallerId, y.CallerId) &&
+                PayloadsEqual(x.Payloads, y.Payloads);
+        }
+
+        private bool ServiceCompletionMessageEqual(ServiceCompletionMessage x, ServiceCompletionMessage y)
+        {
+            return StringEqual(x.InvocationId, y.InvocationId) &&
+                StringEqual(x.ConnectionId, y.ConnectionId) &&
+                StringEqual(x.CallerId, y.CallerId) &&
+                StringEqual(x.Error, y.Error) &&
+                PayloadsEqual(x.Payloads, y.Payloads);
         }
 
         private static bool StringEqual(string x, string y)

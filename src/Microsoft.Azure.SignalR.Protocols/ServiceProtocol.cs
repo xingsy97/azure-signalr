@@ -638,8 +638,8 @@ namespace Microsoft.Azure.SignalR.Protocol
         {
             writer.WriteArrayHeader(6);
             writer.Write(ServiceProtocolConstants.ClientInvocationMessage);
-            writer.Write(message.ConnectionId);
             writer.Write(message.InvocationId);
+            writer.Write(message.ConnectionId);
             writer.Write(message.CallerId);
             WritePayloads(ref writer, message.Payloads);
             message.WriteExtensionMembers(ref writer);
@@ -647,12 +647,13 @@ namespace Microsoft.Azure.SignalR.Protocol
 
         private static void WriteServiceCompletionMessage(ref MessagePackWriter writer, ServiceCompletionMessage message)
         {
-            writer.WriteArrayHeader(6);
+            writer.WriteArrayHeader(7);
             writer.Write(ServiceProtocolConstants.ServiceCompletionMessage);
-            writer.Write(message.ConnectionId);
             writer.Write(message.InvocationId);
+            writer.Write(message.ConnectionId);
             writer.Write(message.CallerId);
-            writer.Write(message.Payload.Span);
+            writer.Write(message.Error);
+            WritePayloads(ref writer, message.Payloads);
             message.WriteExtensionMembers(ref writer);
         }
 
@@ -1176,25 +1177,34 @@ namespace Microsoft.Azure.SignalR.Protocol
 
         private static ClientInvocationMessage CreateClientInvocationMessage(ref MessagePackReader reader, int arrayLength)
         {
-            var connectionId = ReadString(ref reader, "connectionId");
             var invocationId = ReadString(ref reader, "invocationId");
+            var connectionId = ReadString(ref reader, "connectionId");
             var callerId = ReadString(ref reader, "callerId");
             var payloads = ReadPayloads(ref reader);
 
-            var result = new ClientInvocationMessage(connectionId, invocationId, callerId, payloads);
+            var result = new ClientInvocationMessage(invocationId, connectionId, callerId, payloads);
             result.ReadExtensionMembers(ref reader);
             return result;
         }
 
         private static ServiceCompletionMessage CreateServiceCompletionMessage(ref MessagePackReader reader, int arrayLength)
         {
-            var connectionId = ReadString(ref reader, "connectionId");
             var invocationId = ReadString(ref reader, "invocationId");
+            var connectionId = ReadString(ref reader, "connectionId");
             var callerId = ReadString(ref reader, "callerId");
-            var payload = ReadBytes(ref reader, "payload");
             var error = ReadString(ref reader, "error");
+            var payload = ReadPayloads(ref reader);
 
-            var result = new ServiceCompletionMessage(connectionId, invocationId, callerId, payload, error);
+            ServiceCompletionMessage result;
+            if (string.IsNullOrEmpty(error))
+            {
+                result = new ServiceCompletionMessage(invocationId, connectionId, callerId, payload);
+            }
+            else
+            {
+                result = new ServiceCompletionMessage(invocationId, connectionId, callerId, error);
+            }
+
             result.ReadExtensionMembers(ref reader);
             return result;
         }

@@ -199,17 +199,100 @@ namespace Microsoft.Azure.SignalR.Protocol
         }
     }
 
+    /// <summary>
+    /// A data message to indicate a client invocation request.
+    /// </summary>
     public class ClientInvocationMessage : MulticastDataMessage
     {
-        public ClientInvocationMessage(string connectionId, string invocationId, string callerId, IDictionary<string, ReadOnlyMemory<byte>> payloads, ulong? tracingId = null)
+        /// <summary>
+        /// Initialize a new instance of <see cref="ClientInvocationMessage"/> class.
+        /// </summary>
+        /// <param name="invocationId">The ID of the client invocation request.</param>
+        /// <param name="connectionId">The client connection ID.</param>
+        /// <param name="callerId">The serverId that init the client invocation.</param>
+        /// <param name="payloads">The payload of the message.</param>
+        /// <param name="tracingId">The tracing Id of the message.</param>
+        public ClientInvocationMessage(string invocationId, string connectionId, string callerId, IDictionary<string, ReadOnlyMemory<byte>> payloads, ulong? tracingId = null)
             : base(payloads, tracingId)
         {
-            ConnectionId = connectionId;
             InvocationId = invocationId;
+            ConnectionId = connectionId;
             CallerId = callerId;
         }
-        public string ConnectionId { get; set; }
+
+        /// <summary>
+        /// The ID of the client invocation request.
+        /// </summary>
         public string InvocationId { get; set; }
+
+        /// <summary>
+        /// The client connection ID.
+        /// </summary>
+        public string ConnectionId { get; set; }
+
+        /// <summary>
+        /// The serverId that init the client invocation.
+        /// </summary>
         public string CallerId { get; set; }
+    }
+
+    /// <summary>
+    /// A data message of client invocation completion result.
+    /// </summary>
+    public class ServiceCompletionMessage : MulticastDataMessage
+    {
+        /// <summary>
+        /// Initialize a new instance of <see cref="ServiceCompletionMessage"/> class.
+        /// </summary>
+        /// <param name="invocationId">The ID of the invocation that has completed.</param>
+        /// <param name="connectionId">The client connection ID that complete the invocation.</param>
+        /// <param name="callerId">The serverId that wrap the completion result.</param>
+        /// <param name="payloads">The payload of the completion result.</param>
+        /// <param name="tracingId">The tracing Id of the message.</param>
+        public ServiceCompletionMessage(string invocationId, string connectionId, string callerId, IDictionary<string, ReadOnlyMemory<byte>> payloads, ulong? tracingId = null)
+            : base(payloads, tracingId)
+        {
+            InvocationId = invocationId;
+            ConnectionId = connectionId;
+            CallerId = callerId;
+            Payloads = payloads;
+        }
+
+        /// <summary>
+        /// Initialize a new instance of <see cref="ServiceCompletionMessage"/> class with error information.
+        /// </summary>
+        /// <param name="invocationId">The ID of the invocation that has completed.</param>
+        /// <param name="connectionId">The client connection ID that complete the invocation.</param>
+        /// <param name="callerId">The serverId that wrap the completion result.</param>
+        /// <param name="error">The error information about invation failure.</param>
+        /// <param name="tracingId">he tracing Id of the message.</param>
+        public ServiceCompletionMessage(string invocationId, string connectionId, string callerId, string error, ulong? tracingId = null)
+            : base(null, tracingId)
+        {
+            InvocationId = invocationId;
+            ConnectionId = connectionId;
+            CallerId = callerId;
+            Error = error;
+        }
+
+        /// <summary>
+        /// Client invocation id of pending connection.
+        /// </summary>
+        public string InvocationId { get; set; }
+
+        /// <summary>
+        /// Client connection id of target invocation.
+        /// </summary>
+        public string ConnectionId { get; set; }
+
+        /// <summary>
+        /// Server id which wrap the completion message.
+        /// </summary>
+        public string CallerId { get; set; }
+
+        /// <summary>
+        /// Optional error message if the invocation wasn't completed successfully. This must be null if there is a result.
+        /// </summary>
+        public string Error { get; set; }
     }
 }

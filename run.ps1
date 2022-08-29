@@ -124,10 +124,10 @@ function Get-KoreBuild {
             }
 			 
             # Hack to use Core version
-            Write-Host "!!! Hack to use .NET Core SDK 7.0.100-preview.4.22252.9"
+            Write-Host "!!! Hack to use .NET Core SDK 7.0.100-preview.7.22377.5"
             $sdkversion = Get-ChildItem -Path $korebuildPath -Include sdk.version -Recurse
             $sdkpath = Join-Path $sdkversion.DirectoryName $sdkversion.Name
-            Set-Content -Path $sdkpath -Value "7.0.100-preview.4.22252.9" -Force
+            Set-Content -Path $sdkpath -Value "7.0.100-preview.7.22377.5" -Force
         }
         catch {
             Remove-Item -Recurse -Force $korebuildPath -ErrorAction Ignore
@@ -137,6 +137,9 @@ function Get-KoreBuild {
             Remove-Item $tmpfile -ErrorAction Ignore
         }
     }
+
+    $hackTargetPath = "$korebuildPath\modules\vstest\module.targets"
+    (Get-Content $hackTargetPath -Raw) -Replace '<VSTestArgs Include="vstest" />', '<VSTestArgs Include="test" />' | Set-Content $hackTargetPath
 
     return $korebuildPath
 }

@@ -11,8 +11,15 @@ namespace ClientResultSample
 
         public async Task<string> GetMessage(string ID)
         {
-            var res = await Clients.Client(ID).InvokeAsync<string>("GetMessage", default);
-            return $"From {ID}: {res}";
+            try
+            {
+                var res = await Clients.Client(ID).InvokeAsync<string>("GetMessage", default);
+                return $"From {ID}: {res}";
+            }
+            catch(Exception e)
+            {
+                return $"From {ID}: {e.Message}";
+            }
         }
 
         public override Task OnDisconnectedAsync(Exception? exception)

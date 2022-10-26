@@ -5,6 +5,7 @@ var connection = new signalR.HubConnectionBuilder().withUrl("/chat").build();
 //Disable the send button until connection is established.
 document.getElementById("getButton").disabled = true;
 document.getElementById("sendButton").disabled = true;
+document.getElementById("sendErrorButton").disabled = true;
 
 connection.on("Connect", function (message) {
     var li = document.createElement("li");
@@ -17,13 +18,19 @@ connection.on("Connect", function (message) {
 
 connection.on("GetMessage", async function () {
     document.getElementById("sendButton").disabled = false;
+    document.getElementById("sendErrorButton").disabled = false;
     var res = await new Promise(function (resolve, reject) {
         document.getElementById("sendButton").addEventListener("click", (event) => {
             var message = document.getElementById("messageInput").value;
             resolve(message);
         });
+        document.getElementById("sendErrorButton").addEventListener("click", (event) => {
+            var message = document.getElementById("messageInput").value;
+            reject(new Error(message));
+        });
     });
     document.getElementById("sendButton").disabled = true;
+    document.getElementById("sendErrorButton").disabled = true;
     return res;
 });
 

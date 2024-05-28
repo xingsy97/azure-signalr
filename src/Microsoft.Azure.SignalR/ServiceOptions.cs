@@ -120,5 +120,15 @@ namespace Microsoft.Azure.SignalR
         /// Gets or sets a function which accepts <see cref="HttpContext"/> and returns a bitmask combining one or more <see cref="HttpTransportType"/> values that specify what transports the service should use to receive HTTP requests.
         /// </summary>
         public Func<HttpContext, HttpTransportType> TransportTypeDetector { get; set; } = null;
+
+        /// <summary>
+        /// Allow clients enable stateful reconnects for connecting to service.
+        /// By default is disabled.
+        /// It can also be configurate <see cref="HttpConnectionDispatcherOptions"/> by hub in net 8.
+        /// Enable stateful reconnection in client side:
+        /// * Make sure client sdk is net8 or later.
+        /// * Enable stateful reconnect: <code>builder.withStatefulReconnect()</code>
+        /// </summary>
+        internal bool? AllowStatefulReconnects { get; set; }
     }
 }

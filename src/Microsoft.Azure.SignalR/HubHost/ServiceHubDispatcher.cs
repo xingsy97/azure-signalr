@@ -161,7 +161,9 @@ namespace Microsoft.Azure.SignalR
                 _hubProtocolResolver)
             {
                 ConfigureContext = contextConfig,
-                ShutdownMode = _options.GracefulShutdown.Mode
+                ShutdownMode = _options.GracefulShutdown.Mode,
+                // todo: read per hub configuration from HttpConnectionDispatcherOptions.AllowStatefulReconnects for net 8.
+                AllowStatefulReconnects = _options.AllowStatefulReconnects ?? false,
             };
         }
 

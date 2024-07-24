@@ -52,10 +52,6 @@ internal partial class ServiceConnection : ServiceConnectionBase
 
     private readonly IHubProtocolResolver _hubProtocolResolver;
 
-    // Performance: Do not use ConcurrentDictionary. There is no multi-threading scenario here, all operations are in the same logical thread.
-    private readonly Dictionary<string, List<IMemoryOwner<byte>>> _bufferingMessages =
-        new Dictionary<string, List<IMemoryOwner<byte>>>(StringComparer.Ordinal);
-
     public Action<HttpContext> ConfigureContext { get; set; }
 
     public ServiceConnection(IServiceProtocol serviceProtocol,
@@ -126,8 +122,11 @@ internal partial class ServiceConnection : ServiceConnectionBase
                 continue;
             }
 
-            // make sure there is no await operation before _bufferingMessages.
-            _bufferingMessages.Remove(connection.Key);
+            if (_clientConnectionManager.TryGetClientConnection(connection.Key, out var c))
+            {
+                (c as ClientConnectionContext)?.ClearBufferedMessages();
+            }
+
             // We should not wait until all the clients' lifetime ends to restart another service connection
             _ = PerformDisconnectAsyncCore(connection.Key);
         }
@@ -187,10 +186,12 @@ internal partial class ServiceConnection : ServiceConnectionBase
     {
         var connectionId = closeConnectionMessage.ConnectionId;
         // make sure there is no await operation before _bufferingMessages.
-        _bufferingMessages.Remove(connectionId);
         if (_clientConnectionManager.TryGetClientConnection(connectionId, out var clientConnection))
         {
             var connection = clientConnection as ClientConnectionContext;
+
+            connection.ClearBufferedMessages();
+
             if (closeConnectionMessage.Headers.TryGetValue(Constants.AsrsMigrateTo, out var to))
             {
                 connection.AbortOnClose = false;
@@ -214,63 +215,10 @@ internal partial class ServiceConnection : ServiceConnectionBase
         {
             MessageLog.ReceiveMessageFromService(Logger, connectionDataMessage);
         }
-        if (_clientConnectionManager.TryGetClientConnection(connectionDataMessage.ConnectionId, out var clientConnection))
-        {
-            var connection = clientConnection as ClientConnectionContext;
 
-            try
-            {
-#if !NET8_0_OR_GREATER
-                // do NOT write close message until net 8 or later.
-                if (connectionDataMessage.Type == DataMessageType.Close)
-                {
-                    return;
-                }
-#endif
-                if (connectionDataMessage.IsPartial)
-                {
-                    var owner = ExactSizeMemoryPool.Shared.Rent((int)connectionDataMessage.Payload.Length);
-                    connectionDataMessage.Payload.CopyTo(owner.Memory.Span);
-                    // make sure there is no await operation before _bufferingMessages.
-                    if (!_bufferingMessages.TryGetValue(connectionDataMessage.ConnectionId, out var list))
-                    {
-                        list = new List<IMemoryOwner<byte>>();
-                        _bufferingMessages[connectionDataMessage.ConnectionId] = list;
-                    }
-                    list.Add(owner);
-                }
-                else
-                {
-                    // make sure there is no await operation before _bufferingMessages.
-                    if (_bufferingMessages.TryGetValue(connectionDataMessage.ConnectionId, out var list))
-                    {
-                        _bufferingMessages.Remove(connectionDataMessage.ConnectionId);
-                        long length = 0;
-                        foreach (var owner in list)
-                        {
-                            using (owner)
-                            {
-                                await connection.WriteMessageAsync(new ReadOnlySequence<byte>(owner.Memory));
-                                length += owner.Memory.Length;
-                            }
-                        }
-                        var payload = connectionDataMessage.Payload;
-                        length += payload.Length;
-                        Log.WriteMessageToApplication(Logger, length, connectionDataMessage.ConnectionId);
-                        await connection.WriteMessageAsync(payload);
-                    }
-                    else
-                    {
-                        var payload = connectionDataMessage.Payload;
-                        Log.WriteMessageToApplication(Logger, payload.Length, connectionDataMessage.ConnectionId);
-                        await connection.WriteMessageAsync(payload);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.FailToWriteMessageToApplication(Logger, connectionDataMessage, ex);
-            }
+        if (_clientConnectionManager.TryGetClientConnection(connectionDataMessage.ConnectionId, out var connection))
+        {
+            await (connection as ClientConnectionContext).ProcessConnectionDataMessageAsync(connectionDataMessage);
         }
         else
         {
@@ -593,10 +541,12 @@ internal partial class ServiceConnection : ServiceConnectionBase
         return Task.CompletedTask;
     }
 
-    private Task OnConnectionReconnectAsync(ConnectionReconnectMessage connectionReconnectMessage)
+    private Task OnConnectionReconnectAsync(ConnectionReconnectMessage message)
     {
-        // make sure there is no await operation before _bufferingMessages.
-        _bufferingMessages.Remove(connectionReconnectMessage.ConnectionId);
+        if (_clientConnectionManager.TryGetClientConnection(message.ConnectionId, out var connection))
+        {
+            (connection as ClientConnectionContext)?.ClearBufferedMessages();
+        }
         return Task.CompletedTask;
     }
 

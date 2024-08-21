@@ -28,7 +28,7 @@ namespace Microsoft.Azure.SignalR.Protocol
     /// <summary>
     /// A waiting for ack check-user-in-group message.
     /// </summary>
-    public class CheckUserInGroupWithAckMessage : CheckWithAckMessage
+    public class CheckUserInGroupWithAckMessage : CheckWithAckMessage, IPartitionableMessage
     {
         /// <summary>
         /// Gets or sets the user Id.
@@ -39,6 +39,7 @@ namespace Microsoft.Azure.SignalR.Protocol
         /// Gets or sets the group name.
         /// </summary>
         public string GroupName { get; set; }
+        public byte PartitionKey => GeneratePartitionKey(GroupName);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CheckUserInGroupWithAckMessage"/> class.
@@ -57,12 +58,14 @@ namespace Microsoft.Azure.SignalR.Protocol
     /// <summary>
     /// A waiting for ack check-any-connection-in-group message.
     /// </summary>
-    public class CheckGroupExistenceWithAckMessage : CheckWithAckMessage
+    public class CheckGroupExistenceWithAckMessage : CheckWithAckMessage, IPartitionableMessage
     {
         /// <summary>
         /// Gets or sets the group name.
         /// </summary>
         public string GroupName { get; set; }
+
+        public byte PartitionKey => GeneratePartitionKey(GroupName);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CheckGroupExistenceWithAckMessage"/> class.
@@ -101,12 +104,13 @@ namespace Microsoft.Azure.SignalR.Protocol
     /// <summary>
     /// A waiting for ack check-user-existence message.
     /// </summary>
-    public class CheckUserExistenceWithAckMessage : CheckWithAckMessage
+    public class CheckUserExistenceWithAckMessage : CheckWithAckMessage, IPartitionableMessage
     {
         /// <summary>
         /// Gets or sets the user Id.
         /// </summary>
         public string UserId { get; set; }
+        public byte PartitionKey => GeneratePartitionKey(UserId);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CheckUserExistenceWithAckMessage"/> class.

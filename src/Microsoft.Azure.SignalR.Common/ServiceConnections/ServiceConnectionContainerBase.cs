@@ -2,9 +2,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.SignalR.Common;
@@ -24,10 +26,15 @@ namespace Microsoft.Azure.SignalR
 
         private static readonly int MaxReconnectBackOffInternalInMilliseconds = 1000;
 
+        private static readonly TimeSpan MessageWriteRetryDelay = TimeSpan.FromMilliseconds(200);
+        private static readonly int MessageWriteMaxRetry = 3;
+
         // Give (interval * 3 + 1) delay when check value expire.
         private static readonly long DefaultServersPingTimeoutTicks = Stopwatch.Frequency * ((long)Constants.Periods.DefaultServersPingInterval.TotalSeconds * 3 + 1);
 
         private static readonly Tuple<string, long> DefaultServersTagContext = new Tuple<string, long>(string.Empty, 0);
+
+        private readonly IReadOnlyDictionary<byte, StrongBox<WeakReference<IServiceConnection>>> _partitionedCache;
 
         private readonly BackOffPolicy _backOffPolicy = new BackOffPolicy();
 
@@ -155,6 +162,8 @@ namespace Microsoft.Azure.SignalR
             }
 
             _serversPing = new CustomizedPingTimer(Logger, Constants.CustomizedPingTimer.Servers, WriteServersPingAsync, Constants.Periods.DefaultServersPingInterval, Constants.Periods.DefaultServersPingInterval);
+
+            _partitionedCache = Enumerable.Range(0, 256).ToDictionary(i => (byte)i, i => new StrongBox<WeakReference<IServiceConnection>>(new WeakReference<IServiceConnection>(null)));
         }
 
         public event Action<StatusChange> ConnectionStatusChanged;
@@ -216,7 +225,7 @@ namespace Microsoft.Azure.SignalR
 
         public virtual Task WriteAsync(ServiceMessage serviceMessage)
         {
-            return WriteToScopedOrRandomAvailableConnection(serviceMessage);
+            return WriteMessageAsync(serviceMessage);
         }
 
         public async Task<bool> WriteAckableMessageAsync(ServiceMessage serviceMessage, CancellationToken cancellationToken = default)
@@ -233,7 +242,7 @@ namespace Microsoft.Azure.SignalR
             // whereas ackable ones complete upon full roundtrip of the message and the ack (or timeout).
             // Therefore sending them over different connections creates a possibility for processing them out of original order.
             // By sending both message types over the same connection we ensure that they are sent (and processed) in their original order.
-            await WriteToScopedOrRandomAvailableConnection(serviceMessage);
+            await WriteMessageAsync(serviceMessage);
 
             var status = await task;
             return AckHandler.HandleAckStatus(ackableMessage, status);
@@ -414,6 +423,115 @@ namespace Microsoft.Azure.SignalR
             Log.TimeoutWaitingForFinAck(Logger, retry);
         }
 
+        private async Task WriteMessageAsync(ServiceMessage serviceMessage)
+        {
+            var connection = SelectConnection(serviceMessage);
+
+            var retry = 0;
+            var maxRetry = MessageWriteMaxRetry;
+            var delay = MessageWriteRetryDelay;
+            while (true)
+            {
+                try
+                {
+                    await connection.WriteAsync(serviceMessage);
+                    return;
+                }
+                catch (ServiceConnectionNotActiveException)
+                {
+                    // enter the re-select logic
+                    retry++;
+                    if (retry == maxRetry)
+                    {
+                        throw;
+                    }
+
+                    await Task.Delay(delay);
+                    connection = SelectConnection(serviceMessage);
+                }
+            }
+        }
+
+        private IServiceConnection SelectConnection(ServiceMessage message)
+        {
+            IServiceConnection connection = null;
+            if (ClientConnectionScope.IsScopeEstablished)
+            {
+                // see if the execution context already has the connection stored for this container
+                var containers = ClientConnectionScope.OutboundServiceConnections;
+                if (!(containers.TryGetValue(Endpoint.UniqueIndex, out var connectionWeakReference)
+                    && connectionWeakReference.TryGetTarget(out connection)
+                    && IsActiveConnection(connection)))
+                {
+                    connection = GetRandomActiveConnection();
+                    ClientConnectionScope.OutboundServiceConnections[Endpoint.UniqueIndex] = new WeakReference<IServiceConnection>(connection);
+                }
+            }
+            else
+            {
+                // if it is not in scope
+                // if message is partitionable, use the container's partition cache, otherwise use a random connection
+                if (message is IPartitionableMessage partitionable)
+                {
+                    var box = _partitionedCache[partitionable.PartitionKey];
+                    if (!box.Value.TryGetTarget(out connection) || !IsActiveConnection(connection))
+                    {
+                        lock (box)
+                        {
+                            if (!box.Value.TryGetTarget(out connection) || !IsActiveConnection(connection))
+                            {
+                                connection = GetRandomActiveConnection();
+                                box.Value.SetTarget(connection);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    connection = GetRandomActiveConnection();
+                }
+            }
+
+            if (connection == null)
+            {
+                throw new ServiceConnectionNotActiveException();
+            }
+
+            return connection;
+        }
+
+        private bool IsActiveConnection(IServiceConnection connection)
+        {
+            return connection != null && connection.Status == ServiceConnectionStatus.Connected;
+        }
+
+        private IServiceConnection GetRandomActiveConnection()
+        {
+            var currentConnections = ServiceConnections;
+
+            // go through all the connections, it can be useful when one of the remote service instances is down
+            var count = currentConnections.Count;
+            var initial = StaticRandom.Next(-count, count);
+            var maxRetry = count;
+            var retry = 0;
+            var index = (initial & int.MaxValue) % count;
+            var direction = initial > 0 ? 1 : count - 1;
+
+            while (retry < maxRetry)
+            {
+                var connection = currentConnections[index];
+                if (IsActiveConnection(connection))
+                {
+                    return connection;
+                }
+
+                retry++;
+                index = (index + direction) % count;
+            }
+
+            return null;
+        }
+
         private async Task RestartFixedServiceConnectionCoreAsync(int index)
         {
             if (_terminated)
@@ -479,81 +597,6 @@ namespace Microsoft.Azure.SignalR
             {
                 Status = GetStatus();
             }
-        }
-
-        private async Task WriteToScopedOrRandomAvailableConnection(ServiceMessage serviceMessage)
-        {
-            // ServiceConnections can change the collection underneath so we make a local copy and pass it along
-            var currentConnections = ServiceConnections;
-
-            if (ClientConnectionScope.IsScopeEstablished)
-            {
-                // see if the execution context already has the connection stored for this container
-                var containers = ClientConnectionScope.OutboundServiceConnections;
-                Debug.Assert(containers != null);
-                containers.TryGetValue(Endpoint.UniqueIndex, out var connectionWeakReference);
-                IServiceConnection connection = null;
-                connectionWeakReference?.TryGetTarget(out connection);
-
-                var connectionUsed = await WriteWithRetry(serviceMessage, connection, currentConnections);
-
-                // Todo:
-                // There is currently no synchronization when persisting selected connection in ClientConnectionScope.
-                // This is only a concern when there are concurrent writes involved and when one of the following is true:
-                // - we need to change the selected connection (e.g. the currently persisted connection status is bad)
-                // - we need to make the initial connection selection (e.g. no secondary connection in async local yet)
-                // This lack of synchronization can lead to using multiple connections and cause out of order messages.
-
-                // Try to persist the connection choice for the subsequent calls within the same async flow
-                if (connectionUsed != connection)
-                {
-                    ClientConnectionScope.OutboundServiceConnections[Endpoint.UniqueIndex] = new WeakReference<IServiceConnection>(connectionUsed);
-                }
-            }
-            else
-            {
-                await WriteWithRetry(serviceMessage, null, currentConnections);
-            }
-        }
-
-        private async Task<IServiceConnection> WriteWithRetry(ServiceMessage serviceMessage, IServiceConnection connection, List<IServiceConnection> currentConnections)
-        {
-            // go through all the connections, it can be useful when one of the remote service instances is down
-            var count = currentConnections.Count;
-            var initial = StaticRandom.Next(-count, count);
-            var maxRetry = count;
-            var retry = 0;
-            var index = (initial & int.MaxValue) % count;
-            var direction = initial > 0 ? 1 : count - 1;
-
-            // ensure a full sweep starting with the connection flowed with the async context
-            while (retry <= maxRetry)
-            {
-                if (connection != null && connection.Status == ServiceConnectionStatus.Connected)
-                {
-                    try
-                    {
-                        // still possible the connection is not valid
-                        await connection.WriteAsync(serviceMessage);
-                        return connection;
-                    }
-                    catch (ServiceConnectionNotActiveException)
-                    {
-                        if (retry == maxRetry - 1)
-                        {
-                            throw;
-                        }
-                    }
-                }
-
-                // try current index instead
-                connection = currentConnections[index];
-
-                retry++;
-                index = (index + direction) % count;
-            }
-
-            throw new ServiceConnectionNotActiveException();
         }
 
         private IEnumerable<IServiceConnection> CreateFixedServiceConnection(int count)

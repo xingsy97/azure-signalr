@@ -178,6 +178,8 @@ internal abstract partial class ServiceConnectionBase : IServiceConnection
                 }
                 finally
                 {
+                    // mark the status as Disconnected so that no one will write to this connection anymore
+                    Status = ServiceConnectionStatus.Disconnected;
                     syncTimer?.Stop();
 
                     // when ProcessIncoming completes, clean up the connection
@@ -195,10 +197,7 @@ internal abstract partial class ServiceConnectionBase : IServiceConnection
             finally
             {
                 // wait until all the connections are cleaned up to close the outgoing pipe
-                // mark the status as Disconnected so that no one will write to this connection anymore
                 // Don't allow write anymore when the connection is disconnected
-                Status = ServiceConnectionStatus.Disconnected;
-
                 await _writeLock.WaitAsync();
                 try
                 {

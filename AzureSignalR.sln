@@ -8,12 +8,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{DA69F624-539
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{C4BC9889-B49F-41B6-806B-F84941B2549B}"
+	ProjectSection(SolutionItems) = preProject
+		samples\Directory.Build.props = samples\Directory.Build.props
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.Azure.SignalR", "src\Microsoft.Azure.SignalR\Microsoft.Azure.SignalR.csproj", "{7B124E40-36AC-45CC-9467-F6A50D5FC149}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{36024D6C-A549-4269-B11B-4BFC5F08BD11}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		build\dependencies.private.props = build\dependencies.private.props
 		build\dependencies.props = build\dependencies.props
 		Directory.Build.props = Directory.Build.props
 		Directory.Build.targets = Directory.Build.targets
@@ -25,6 +29,9 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.Azure.SignalR.Protocols", "src\Microsoft.Azure.SignalR.Protocols\Microsoft.Azure.SignalR.Protocols.csproj", "{2EBFCD26-6E31-4855-ABF5-0A82E78F87C7}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{2429FBD8-1FCE-4C42-AA28-DF32F7249E77}"
+	ProjectSection(SolutionItems) = preProject
+		test\Directory.Build.props = test\Directory.Build.props
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.Azure.SignalR.Tests", "test\Microsoft.Azure.SignalR.Tests\Microsoft.Azure.SignalR.Tests.csproj", "{764DCFF5-D28D-4CEF-B186-B7A62FBB3E98}"
 EndProject
@@ -62,7 +69,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorAppSample", "samples\
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ChatSample", "ChatSample", "{C965ED06-6A17-4329-B3C6-811830F4F4ED}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChatSample.NetCore31", "samples\ChatSample\ChatSample.NetCore31\ChatSample.NetCore31.csproj", "{63BB9836-126B-4E65-92B9-019438185E41}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChatSample", "samples\ChatSample\ChatSample\ChatSample.csproj", "{63BB9836-126B-4E65-92B9-019438185E41}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.Azure.SignalR.IntegrationTests", "test\Microsoft.Azure.SignalR.IntegrationTests\Microsoft.Azure.SignalR.IntegrationTests.csproj", "{3E11208B-B038-4840-8180-69DC6B5EAD22}"
 EndProject

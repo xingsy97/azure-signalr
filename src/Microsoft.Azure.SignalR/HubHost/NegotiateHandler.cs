@@ -38,6 +38,7 @@ namespace Microsoft.Azure.SignalR
 #if NET6_0_OR_GREATER
         private readonly HttpConnectionDispatcherOptions _dispatcherOptions;
 #endif
+        private readonly ICultureFeatureManager _cultureInfoManager;
 
         public NegotiateHandler(
             IOptions<HubOptions> globalHubOptions,
@@ -52,7 +53,8 @@ namespace Microsoft.Azure.SignalR
 #if NET6_0_OR_GREATER
             EndpointDataSource endpointDataSource,
 #endif
-            ILogger<NegotiateHandler<THub>> logger)
+            ILogger<NegotiateHandler<THub>> logger,
+            ICultureFeatureManager cultureInfoManager)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _endpointManager = endpointManager ?? throw new ArgumentNullException(nameof(endpointManager));
@@ -73,14 +75,14 @@ namespace Microsoft.Azure.SignalR
 #if NET6_0_OR_GREATER
             _dispatcherOptions = GetDispatcherOptions(endpointDataSource, typeof(THub));
 #endif
+            _cultureInfoManager = cultureInfoManager ?? throw new ArgumentNullException(nameof(cultureInfoManager));
         }
 
         public async Task<NegotiationResponse> Process(HttpContext context)
         {
             var claims = BuildClaims(context);
             var request = context.Request;
-            var cultureName = context.Features.Get<IRequestCultureFeature>()?.RequestCulture.Culture.Name;
-            var uiCultureName = context.Features.Get<IRequestCultureFeature>()?.RequestCulture.UICulture.Name;
+            var cultureFeature = context.Features.Get<IRequestCultureFeature>();
             var originalPath = GetOriginalPath(request.Path);
             var provider = _endpointManager.GetEndpointProvider(_router.GetNegotiateEndpoint(context, _endpointManager.GetEndpoints(_hubName)));
 
@@ -89,11 +91,13 @@ namespace Microsoft.Azure.SignalR
                 return null;
             }
 
+            var clientRequestId = _connectionRequestIdProvider.GetRequestId(context.TraceIdentifier);
             var queryString = GetQueryString(
                 request.QueryString.HasValue ? request.QueryString.Value.Substring(1) : null,
-                cultureName,
-                uiCultureName
+                clientRequestId
             );
+
+            _cultureInfoManager.TryAddCultureFeature(clientRequestId, cultureFeature);
 
             return new NegotiationResponse
             {
@@ -104,24 +108,14 @@ namespace Microsoft.Azure.SignalR
             };
         }
 
-        private string GetQueryString(string originalQueryString, string cultureName, string uiCultureName)
+        private string GetQueryString(string originalQueryString, string clientRequestId)
         {
-            var clientRequestId = _connectionRequestIdProvider.GetRequestId();
             if (clientRequestId != null)
             {
                 clientRequestId = WebUtility.UrlEncode(clientRequestId);
             }
 
             var queryString = $"{Constants.QueryParameter.ConnectionRequestId}={clientRequestId}";
-            if (!string.IsNullOrEmpty(cultureName))
-            {
-                queryString += $"&{Constants.QueryParameter.RequestCulture}={cultureName}";
-            }
-            if (!string.IsNullOrEmpty(uiCultureName))
-            {
-                queryString += $"&{Constants.QueryParameter.RequestUICulture}={uiCultureName}";
-            }
-
             return originalQueryString != null
                 ? $"{originalQueryString}&{queryString}"
                 : queryString;

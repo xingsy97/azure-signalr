@@ -33,7 +33,8 @@ namespace Microsoft.Azure.SignalR.IntegrationTests.Infrastructure
                   nameProvider,
                   null,
                   clientInvocationManager,
-                  hubProtocolResolver)
+                  hubProtocolResolver,
+                  null)
         {
             _mockService = mockService;
         }

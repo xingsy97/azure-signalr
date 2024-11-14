@@ -38,7 +38,7 @@ namespace Microsoft.Azure.SignalR
 #if NET6_0_OR_GREATER
         private readonly HttpConnectionDispatcherOptions _dispatcherOptions;
 #endif
-        private readonly ICultureFeatureManager _cultureInfoManager;
+        private readonly ICultureFeatureManager _cultureFeatureManager;
 
         public NegotiateHandler(
             IOptions<HubOptions> globalHubOptions,
@@ -53,8 +53,8 @@ namespace Microsoft.Azure.SignalR
 #if NET6_0_OR_GREATER
             EndpointDataSource endpointDataSource,
 #endif
-            ILogger<NegotiateHandler<THub>> logger,
-            ICultureFeatureManager cultureInfoManager)
+            ICultureFeatureManager cultureFeatureManager,
+            ILogger<NegotiateHandler<THub>> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _endpointManager = endpointManager ?? throw new ArgumentNullException(nameof(endpointManager));
@@ -75,7 +75,7 @@ namespace Microsoft.Azure.SignalR
 #if NET6_0_OR_GREATER
             _dispatcherOptions = GetDispatcherOptions(endpointDataSource, typeof(THub));
 #endif
-            _cultureInfoManager = cultureInfoManager ?? throw new ArgumentNullException(nameof(cultureInfoManager));
+            _cultureFeatureManager = cultureFeatureManager ?? throw new ArgumentNullException(nameof(cultureFeatureManager));
         }
 
         public async Task<NegotiationResponse> Process(HttpContext context)
@@ -97,7 +97,10 @@ namespace Microsoft.Azure.SignalR
                 clientRequestId
             );
 
-            _cultureInfoManager.TryAddCultureFeature(clientRequestId, cultureFeature);
+            if (_blazorDetector.IsBlazor(_hubName))
+            {
+                _cultureFeatureManager.TryAddCultureFeature(clientRequestId, cultureFeature);
+            }
 
             return new NegotiationResponse
             {

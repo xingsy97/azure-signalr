@@ -501,7 +501,6 @@ public class ServiceMessageTests : VerifiableLoggedTest
                 clientInvocationManager,
                 hubProtocolResolver,
                 null,
-                null,
                 connectionType: connectionType,
                 mode: mode)
         {
